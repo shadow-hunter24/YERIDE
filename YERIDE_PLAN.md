@@ -22,21 +22,21 @@ YɛRide is a motorbike (Okada) ride-hailing app for Ghana, connecting passengers
 ## Apps to Build
 
 ### 1. Passenger App
-- [ ] Registration & Login
-- [ ] Ride Booking (pickup & destination input)
-- [ ] Fare Estimation
-- [ ] Live GPS Tracking
-- [ ] In-app Payment
-- [ ] Trip History
-- [ ] Rate Rider
+- [x] Registration & Login
+- [x] Ride Booking (pickup & destination input)
+- [x] Fare Estimation
+- [x] Live GPS Tracking
+- [x] In-app Payment
+- [x] Trip History
+- [x] Rate Rider
 
 ### 2. Rider App
-- [ ] Registration & Verification
-- [ ] Availability Toggle
-- [ ] Ride Request Alerts
-- [ ] Navigation System
-- [ ] Earnings Dashboard
-- [ ] Rate Passenger
+- [x] Registration & Verification
+- [x] Availability Toggle
+- [x] Ride Request Alerts
+- [x] Navigation System
+- [x] Earnings Dashboard
+- [x] Rate Passenger
 
 ### 3. Admin Dashboard (Web)
 - [ ] User & Rider Management
@@ -70,11 +70,11 @@ YɛRide is a motorbike (Okada) ride-hailing app for Ghana, connecting passengers
 ## Development Phases
 
 ### Phase 1 — UI/UX (Week 1–2)
-- [ ] Splash & Onboarding screens
-- [ ] Auth screens (Login, Register)
-- [ ] Passenger home screen (map + booking)
-- [ ] Rider home screen (map + toggle)
-- [ ] Trip screens (tracking, completion, rating)
+- [x] Splash & Onboarding screens
+- [x] Auth screens (Login, Register)
+- [x] Passenger home screen (map + booking)
+- [x] Rider home screen (map + toggle)
+- [x] Trip screens (tracking, completion, rating)
 
 ### Phase 2 — Backend & Core Features (Week 3–5)
 - [ ] Firebase Auth setup (email + phone)
@@ -118,4 +118,5 @@ YɛRide is a motorbike (Okada) ride-hailing app for Ghana, connecting passengers
 ## Current Status
 - [x] Flutter project initialized
 - [x] App runs on physical device (itel A667L)
-- [ ] Phase 1 started
+- [x] Phase 1 complete
+- [ ] Phase 2 in progress

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "33526722996",
+    "project_id": "yeride-e8966",
+    "storage_bucket": "yeride-e8966.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:33526722996:android:65e166221fc6da4c2802e1",
+        "android_client_info": {
+          "package_name": "com.shadowtechnologies.yeride"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMETN7EgkG-WT2Ik4clnZdQwd1jVBvgTI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

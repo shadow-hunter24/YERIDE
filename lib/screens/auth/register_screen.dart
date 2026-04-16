@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import 'login_screen.dart';
 import '../passenger/home_screen.dart';
-import '../rider/home_screen.dart';
+import '../rider/home_screen.dart' as rider;
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -16,7 +17,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
   bool _obscure = true;
+  bool _loading = false;
   String _role = 'passenger';
 
   @override
@@ -28,17 +31,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _register() {
-    if (_formKey.currentState!.validate()) {
+  void _register() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+    try {
+      await _authService.register(
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        role: _role,
+      );
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => _role == 'rider'
-              ? const RiderHomeScreen()
+              ? rider.RiderHomeScreen()
               : const PassengerHomeScreen(),
         ),
       );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_friendlyError(e.toString())),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _friendlyError(String error) {
+    if (error.contains('email-already-in-use')) return 'Email already registered.';
+    if (error.contains('invalid-email')) return 'Invalid email address.';
+    if (error.contains('weak-password')) return 'Password is too weak.';
+    if (error.contains('network-request-failed')) return 'No internet connection.';
+    return 'Registration failed. Please try again.';
   }
 
   @override
@@ -61,19 +93,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Create Account',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold),
-                ),
+                const Text('Create Account',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 const Text('Join YɛRide today',
                     style: TextStyle(color: Colors.white54)),
                 const SizedBox(height: 32),
-
-                // Role selector
                 Row(
                   children: [
                     _roleChip('passenger', '🧑 Passenger'),
@@ -82,7 +110,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-
                 _buildField(
                     controller: _nameController,
                     label: 'Full Name',
@@ -99,9 +126,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 16),
                 _buildField(
                     controller: _emailController,
-                    label: 'Email (optional)',
+                    label: 'Email',
                     icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) => v!.isEmpty ? 'Enter your email' : null),
                 const SizedBox(height: 16),
                 _buildField(
                   controller: _passwordController,
@@ -125,12 +153,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: _register,
-                  child: const Text('Create Account',
-                      style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
+                  onPressed: _loading ? null : _register,
+                  child: _loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.black, strokeWidth: 2))
+                      : const Text('Create Account',
+                          style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -166,13 +200,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             color: selected ? const Color(0xFFFFC107) : Colors.white24,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.black : Colors.white54,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        child: Text(label,
+            style: TextStyle(
+                color: selected ? Colors.black : Colors.white54,
+                fontWeight: FontWeight.w600)),
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import 'register_screen.dart';
 import '../passenger/home_screen.dart';
+import '../rider/home_screen.dart' as rider;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,7 +15,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
   bool _obscure = true;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -22,13 +26,46 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _login() {
-    if (_formKey.currentState!.validate()) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const PassengerHomeScreen()),
+  void _login() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+    try {
+      final cred = await _authService.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
+      if (cred != null && mounted) {
+        final role = await _authService.getUserRole(cred.user!.uid);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => role == 'rider'
+                ? rider.RiderHomeScreen()
+                : const PassengerHomeScreen(),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_friendlyError(e.toString())),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _friendlyError(String error) {
+    if (error.contains('user-not-found')) return 'No account found with this email.';
+    if (error.contains('wrong-password')) return 'Incorrect password.';
+    if (error.contains('invalid-email')) return 'Invalid email address.';
+    if (error.contains('network-request-failed')) return 'No internet connection.';
+    return 'Login failed. Please try again.';
   }
 
   @override
@@ -46,23 +83,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 40),
                 Center(child: Image.asset('YeRide.png', width: 80)),
                 const SizedBox(height: 24),
-                const Text(
-                  'Welcome back',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold),
-                ),
+                const Text('Welcome back',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 const Text('Sign in to continue',
                     style: TextStyle(color: Colors.white54)),
                 const SizedBox(height: 40),
                 _buildField(
                   controller: _emailController,
-                  label: 'Email or Phone',
-                  icon: Icons.person_outline,
-                  validator: (v) =>
-                      v!.isEmpty ? 'Enter your email or phone' : null,
+                  label: 'Email',
+                  icon: Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (v) => v!.isEmpty ? 'Enter your email' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildField(
@@ -76,8 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Colors.white54),
                     onPressed: () => setState(() => _obscure = !_obscure),
                   ),
-                  validator: (v) =>
-                      v!.length < 6 ? 'Password too short' : null,
+                  validator: (v) => v!.length < 6 ? 'Password too short' : null,
                 ),
                 const SizedBox(height: 12),
                 Align(
@@ -96,12 +130,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: _login,
-                  child: const Text('Login',
-                      style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
+                  onPressed: _loading ? null : _login,
+                  child: _loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.black, strokeWidth: 2))
+                      : const Text('Login',
+                          style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -120,6 +160,60 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                const Row(children: [
+                  Expanded(child: Divider(color: Colors.white12)),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('or preview as',
+                        style: TextStyle(color: Colors.white24, fontSize: 12)),
+                  ),
+                  Expanded(child: Divider(color: Colors.white12)),
+                ]),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.white12),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const PassengerHomeScreen()),
+                        ),
+                        icon: const Text('🧑',
+                            style: TextStyle(fontSize: 16)),
+                        label: const Text('Passenger',
+                            style: TextStyle(color: Colors.white54)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.white12),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => rider.RiderHomeScreen()),
+                        ),
+                        icon: const Text('🏍',
+                            style: TextStyle(fontSize: 16)),
+                        label: const Text('Rider',
+                            style: TextStyle(color: Colors.white54)),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -134,11 +228,13 @@ class _LoginScreenState extends State<LoginScreen> {
     required IconData icon,
     bool obscure = false,
     Widget? suffix,
+    TextInputType? keyboardType,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       obscureText: obscure,
+      keyboardType: keyboardType,
       style: const TextStyle(color: Colors.white),
       validator: validator,
       decoration: InputDecoration(

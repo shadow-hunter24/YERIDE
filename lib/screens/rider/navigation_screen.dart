@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'rate_passenger_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
@@ -34,20 +35,15 @@ class _NavigationScreenState extends State<NavigationScreen> {
       backgroundColor: const Color(0xFF121212),
       body: Stack(
         children: [
-          // Map placeholder
-          Container(
-            color: const Color(0xFF1A1A2E),
-            child: const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.map, color: Colors.white12, size: 80),
-                  SizedBox(height: 12),
-                  Text('Navigation Map',
-                      style: TextStyle(color: Colors.white12)),
-                ],
-              ),
+          // Live Map
+          GoogleMap(
+            initialCameraPosition: const CameraPosition(
+              target: LatLng(5.6037, -0.1870),
+              zoom: 15,
             ),
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
           ),
 
           // Top direction banner

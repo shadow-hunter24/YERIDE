@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../services/trip_service.dart';
 import 'rating_screen.dart';
 
@@ -87,20 +88,15 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
           return Stack(
             children: [
-              // Map placeholder
-              Container(
-                color: const Color(0xFF1A1A2E),
-                child: const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.map, color: Colors.white12, size: 80),
-                      SizedBox(height: 12),
-                      Text('Live Map',
-                          style: TextStyle(color: Colors.white12, fontSize: 16)),
-                    ],
-                  ),
+              // Live Map
+              GoogleMap(
+                initialCameraPosition: const CameraPosition(
+                  target: LatLng(5.6037, -0.1870),
+                  zoom: 15,
                 ),
+                myLocationEnabled: true,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
               ),
 
               // Back button

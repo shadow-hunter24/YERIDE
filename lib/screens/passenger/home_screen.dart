@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../services/user_service.dart';
+import '../../services/location_service.dart';
 import 'booking_screen.dart';
 import 'trip_history_screen.dart';
 import 'profile_screen.dart';
@@ -52,11 +55,24 @@ class _HomeContent extends StatefulWidget {
 
 class _HomeContentState extends State<_HomeContent> {
   String _name = '';
+  GoogleMapController? _mapController;
+  LatLng _currentPosition = const LatLng(5.6037, -0.1870); // Default: Accra
+  final _locationService = LocationService();
 
   @override
   void initState() {
     super.initState();
     _loadName();
+    _loadLocation();
+  }
+
+  void _loadLocation() async {
+    final pos = await _locationService.getCurrentPosition();
+    if (pos != null && mounted) {
+      setState(() => _currentPosition = LatLng(pos.latitude, pos.longitude));
+      _mapController?.animateCamera(
+          CameraUpdate.newLatLng(_currentPosition));
+    }
   }
 
   void _loadName() async {
@@ -142,25 +158,23 @@ class _HomeContentState extends State<_HomeContent> {
 
           const SizedBox(height: 20),
 
-          // Map placeholder + Book button
+          // Map + Book button
           Expanded(
             child: Stack(
               children: [
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_outlined, color: Colors.white24, size: 60),
-                        SizedBox(height: 12),
-                        Text('Map coming soon',
-                            style: TextStyle(color: Colors.white24)),
-                      ],
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: _currentPosition,
+                        zoom: 15,
+                      ),
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: false,
+                      onMapCreated: (c) => _mapController = c,
                     ),
                   ),
                 ),

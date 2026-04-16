@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../services/user_service.dart';
 import 'ride_request_screen.dart';
 
@@ -139,33 +140,18 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
           Expanded(
             child: Stack(
               children: [
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_outlined,
-                            color: _isOnline
-                                ? const Color(0xFFFFC107).withOpacity(0.3)
-                                : Colors.white12,
-                            size: 60),
-                        const SizedBox(height: 12),
-                        Text(
-                          _isOnline
-                              ? 'Waiting for ride requests...'
-                              : 'Go online to receive requests',
-                          style: TextStyle(
-                            color: _isOnline
-                                ? Colors.white38
-                                : Colors.white12,
-                          ),
-                        ),
-                      ],
+                    child: GoogleMap(
+                      initialCameraPosition: const CameraPosition(
+                        target: LatLng(5.6037, -0.1870),
+                        zoom: 15,
+                      ),
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: false,
                     ),
                   ),
                 ),

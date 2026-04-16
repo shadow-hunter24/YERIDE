@@ -160,60 +160,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                const Row(children: [
-                  Expanded(child: Divider(color: Colors.white12)),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('or preview as',
-                        style: TextStyle(color: Colors.white24, fontSize: 12)),
-                  ),
-                  Expanded(child: Divider(color: Colors.white12)),
-                ]),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white12),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const PassengerHomeScreen()),
-                        ),
-                        icon: const Text('🧑',
-                            style: TextStyle(fontSize: 16)),
-                        label: const Text('Passenger',
-                            style: TextStyle(color: Colors.white54)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.white12),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => rider.RiderHomeScreen()),
-                        ),
-                        icon: const Text('🏍',
-                            style: TextStyle(fontSize: 16)),
-                        label: const Text('Rider',
-                            style: TextStyle(color: Colors.white54)),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),

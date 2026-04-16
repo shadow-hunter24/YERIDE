@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import 'login_screen.dart';
-import '../passenger/home_screen.dart';
-import '../rider/home_screen.dart' as rider;
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -43,13 +41,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
         role: _role,
       );
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _role == 'rider'
-              ? rider.RiderHomeScreen()
-              : const PassengerHomeScreen(),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account created successfully!'),
+          backgroundColor: Color(0xFF4CAF50),
+          duration: Duration(seconds: 2),
         ),
+      );
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
       );
     } catch (e) {
       if (mounted) {

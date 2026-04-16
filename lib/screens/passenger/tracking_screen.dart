@@ -1,209 +1,243 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/trip_service.dart';
 import 'rating_screen.dart';
 
 class TrackingScreen extends StatefulWidget {
-  const TrackingScreen({super.key});
+  final String tripId;
+  final String pickup;
+  final String destination;
+  final double fare;
+
+  const TrackingScreen({
+    super.key,
+    required this.tripId,
+    required this.pickup,
+    required this.destination,
+    required this.fare,
+  });
 
   @override
   State<TrackingScreen> createState() => _TrackingScreenState();
 }
 
 class _TrackingScreenState extends State<TrackingScreen> {
-  final List<Map<String, String>> _steps = [
-    {'status': 'Finding your rider...', 'done': 'false'},
-    {'status': 'Rider accepted your request', 'done': 'false'},
-    {'status': 'Rider is on the way', 'done': 'false'},
-    {'status': 'Rider arrived', 'done': 'false'},
-    {'status': 'Trip in progress', 'done': 'false'},
-  ];
-  int _currentStep = 0;
+  final _tripService = TripService();
 
-  @override
-  void initState() {
-    super.initState();
-    _simulateProgress();
-  }
-
-  void _simulateProgress() async {
-    for (int i = 0; i < _steps.length; i++) {
-      await Future.delayed(const Duration(seconds: 2));
-      if (mounted) {
-        setState(() => _currentStep = i + 1);
-      }
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'pending': return 'Finding your rider...';
+      case 'accepted': return 'Rider accepted your request';
+      case 'arriving': return 'Rider is on the way';
+      case 'arrived': return 'Rider has arrived';
+      case 'ongoing': return 'Trip in progress';
+      case 'completed': return 'Trip Completed!';
+      default: return 'Processing...';
     }
   }
+
+  int _stepIndex(String status) {
+    switch (status) {
+      case 'pending': return 0;
+      case 'accepted': return 1;
+      case 'arriving': return 2;
+      case 'arrived': return 3;
+      case 'ongoing': return 4;
+      case 'completed': return 5;
+      default: return 0;
+    }
+  }
+
+  final List<String> _steps = [
+    'Finding your rider...',
+    'Rider accepted your request',
+    'Rider is on the way',
+    'Rider arrived',
+    'Trip in progress',
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      body: Stack(
-        children: [
-          // Map placeholder
-          Container(
-            color: const Color(0xFF1A1A2E),
-            child: const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.map, color: Colors.white12, size: 80),
-                  SizedBox(height: 12),
-                  Text('Live Map',
-                      style: TextStyle(color: Colors.white12, fontSize: 16)),
-                ],
-              ),
-            ),
-          ),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: _tripService.listenToTrip(widget.tripId),
+        builder: (context, snapshot) {
+          final data = snapshot.data?.data() as Map<String, dynamic>?;
+          final status = data?['status'] ?? 'pending';
+          final riderName = data?['riderName'] ?? 'Finding rider...';
+          final currentStep = _stepIndex(status);
 
-          // Back button
-          Positioned(
-            top: 48,
-            left: 16,
-            child: CircleAvatar(
-              backgroundColor: const Color(0xFF1E1E1E),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-          ),
-
-          // Bottom sheet
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Status
-                  Text(
-                    _currentStep < _steps.length
-                        ? _steps[_currentStep]['status']!
-                        : 'Trip Completed!',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold),
+          // Auto navigate to rating when completed
+          if (status == 'completed') {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RatingScreen(
+                    tripId: widget.tripId,
+                    riderId: data?['riderId'] ?? '',
+                    riderName: riderName,
+                    fare: widget.fare,
                   ),
-                  const SizedBox(height: 20),
+                ),
+              );
+            });
+          }
 
-                  // Rider info
-                  Row(
+          return Stack(
+            children: [
+              // Map placeholder
+              Container(
+                color: const Color(0xFF1A1A2E),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: const Color(0xFF121212),
-                        child: const Text('🏍', style: TextStyle(fontSize: 24)),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text('Kwame Asante',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16)),
-                            SizedBox(height: 2),
-                            Text('Honda CB125 · GR-1234-21',
-                                style: TextStyle(
-                                    color: Colors.white54, fontSize: 13)),
-                            SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(Icons.star,
-                                    color: Color(0xFFFFC107), size: 14),
-                                SizedBox(width: 4),
-                                Text('4.8',
-                                    style: TextStyle(
-                                        color: Colors.white54, fontSize: 13)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Call & chat buttons
-                      IconButton(
-                        onPressed: () {},
-                        icon: const Icon(Icons.call,
-                            color: Color(0xFFFFC107)),
-                      ),
-                      IconButton(
-                        onPressed: () {},
-                        icon: const Icon(Icons.chat_bubble_outline,
-                            color: Color(0xFFFFC107)),
-                      ),
+                      Icon(Icons.map, color: Colors.white12, size: 80),
+                      SizedBox(height: 12),
+                      Text('Live Map',
+                          style: TextStyle(color: Colors.white12, fontSize: 16)),
                     ],
                   ),
+                ),
+              ),
 
-                  const SizedBox(height: 20),
+              // Back button
+              Positioned(
+                top: 48,
+                left: 16,
+                child: CircleAvatar(
+                  backgroundColor: const Color(0xFF1E1E1E),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ),
 
-                  // Progress steps
-                  ...List.generate(_steps.length, (i) {
-                    final done = i < _currentStep;
-                    final active = i == _currentStep;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
+              // Bottom sheet
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1E1E1E),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _statusLabel(status),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Rider info
+                      Row(
                         children: [
-                          Icon(
-                            done ? Icons.check_circle : Icons.radio_button_unchecked,
-                            color: done
-                                ? const Color(0xFF4CAF50)
-                                : active
-                                    ? const Color(0xFFFFC107)
-                                    : Colors.white24,
-                            size: 18,
+                          const CircleAvatar(
+                            radius: 28,
+                            backgroundColor: Color(0xFF121212),
+                            child: Text('🏍', style: TextStyle(fontSize: 24)),
                           ),
-                          const SizedBox(width: 10),
-                          Text(
-                            _steps[i]['status']!,
-                            style: TextStyle(
-                              color: done
-                                  ? Colors.white
-                                  : active
-                                      ? const Color(0xFFFFC107)
-                                      : Colors.white38,
-                              fontSize: 13,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(riderName,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'GH₵ ${widget.fare.toStringAsFixed(2)} · ${widget.pickup} → ${widget.destination}',
+                                  style: const TextStyle(
+                                      color: Colors.white54, fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
+                          ),
+                          IconButton(
+                            onPressed: () {},
+                            icon: const Icon(Icons.call,
+                                color: Color(0xFFFFC107)),
                           ),
                         ],
                       ),
-                    );
-                  }),
 
-                  const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                  if (_currentStep >= _steps.length)
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFC107),
-                        minimumSize: const Size(double.infinity, 52),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const RatingScreen()),
-                      ),
-                      child: const Text('Complete Trip',
-                          style: TextStyle(
-                              color: Colors.black,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16)),
-                    ),
-                ],
+                      // Progress steps
+                      ...List.generate(_steps.length, (i) {
+                        final done = i < currentStep;
+                        final active = i == currentStep;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                done
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: done
+                                    ? const Color(0xFF4CAF50)
+                                    : active
+                                        ? const Color(0xFFFFC107)
+                                        : Colors.white24,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                _steps[i],
+                                style: TextStyle(
+                                  color: done
+                                      ? Colors.white
+                                      : active
+                                          ? const Color(0xFFFFC107)
+                                          : Colors.white38,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+
+                      const SizedBox(height: 16),
+
+                      // Cancel button (only when pending)
+                      if (status == 'pending')
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white24),
+                            minimumSize: const Size(double.infinity, 48),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () async {
+                            await _tripService.updateTripStatus(
+                                widget.tripId, 'cancelled');
+                            if (mounted) Navigator.pop(context);
+                          },
+                          child: const Text('Cancel Ride',
+                              style: TextStyle(color: Colors.white54)),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
+import '../../services/trip_service.dart';
 import 'home_screen.dart';
 
 class RatingScreen extends StatefulWidget {
-  const RatingScreen({super.key});
+  final String tripId;
+  final String riderId;
+  final String riderName;
+  final double fare;
+
+  const RatingScreen({
+    super.key,
+    required this.tripId,
+    required this.riderId,
+    required this.riderName,
+    required this.fare,
+  });
 
   @override
   State<RatingScreen> createState() => _RatingScreenState();
@@ -11,11 +23,39 @@ class RatingScreen extends StatefulWidget {
 class _RatingScreenState extends State<RatingScreen> {
   int _rating = 0;
   final _commentController = TextEditingController();
+  final _tripService = TripService();
+  bool _submitting = false;
 
   @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
+  }
+
+  void _submit() async {
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a rating')),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      await _tripService.submitRating(
+        tripId: widget.tripId,
+        ratedUserId: widget.riderId,
+        rating: _rating,
+        comment: _commentController.text,
+        raterRole: 'passenger',
+      );
+    } catch (_) {}
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const PassengerHomeScreen()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -34,19 +74,17 @@ class _RatingScreenState extends State<RatingScreen> {
                       fontSize: 22,
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('GH₵ 8.00 paid via MTN MoMo',
-                  style: TextStyle(color: Colors.white54)),
+              Text('GH₵ ${widget.fare.toStringAsFixed(2)} paid via MTN MoMo',
+                  style: const TextStyle(color: Colors.white54)),
               const SizedBox(height: 40),
-
-              // Rider avatar
               const CircleAvatar(
                 radius: 40,
                 backgroundColor: Color(0xFF1E1E1E),
                 child: Text('🏍', style: TextStyle(fontSize: 36)),
               ),
               const SizedBox(height: 12),
-              const Text('Kwame Asante',
-                  style: TextStyle(
+              Text(widget.riderName,
+                  style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold)),
@@ -54,8 +92,6 @@ class _RatingScreenState extends State<RatingScreen> {
               const Text('How was your ride?',
                   style: TextStyle(color: Colors.white54)),
               const SizedBox(height: 24),
-
-              // Stars
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(5, (i) {
@@ -73,8 +109,6 @@ class _RatingScreenState extends State<RatingScreen> {
                 }),
               ),
               const SizedBox(height: 32),
-
-              // Comment
               TextField(
                 controller: _commentController,
                 style: const TextStyle(color: Colors.white),
@@ -91,7 +125,6 @@ class _RatingScreenState extends State<RatingScreen> {
                 ),
               ),
               const Spacer(),
-
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFC107),
@@ -99,17 +132,18 @@ class _RatingScreenState extends State<RatingScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () => Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const PassengerHomeScreen()),
-                  (route) => false,
-                ),
-                child: const Text('Submit Rating',
-                    style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold)),
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.black, strokeWidth: 2))
+                    : const Text('Submit Rating',
+                        style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 12),
               TextButton(

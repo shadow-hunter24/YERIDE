@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import '../../services/location_service.dart';
 import 'fare_estimate_screen.dart';
 
 class BookingScreen extends StatefulWidget {
@@ -11,6 +13,9 @@ class BookingScreen extends StatefulWidget {
 class _BookingScreenState extends State<BookingScreen> {
   final _pickupController = TextEditingController();
   final _destinationController = TextEditingController();
+  final _locationService = LocationService();
+  bool _loadingLocation = false;
+  Position? _currentPosition;
 
   final List<String> _recentPlaces = [
     'Accra Mall, Spintex',
@@ -21,10 +26,32 @@ class _BookingScreenState extends State<BookingScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _fetchCurrentLocation();
+  }
+
+  @override
   void dispose() {
     _pickupController.dispose();
     _destinationController.dispose();
     super.dispose();
+  }
+
+  void _fetchCurrentLocation() async {
+    setState(() => _loadingLocation = true);
+    final position = await _locationService.getCurrentPosition();
+    if (position != null && mounted) {
+      final address = await _locationService.getAddressFromLatLng(
+          position.latitude, position.longitude);
+      setState(() {
+        _currentPosition = position;
+        _pickupController.text = address;
+        _loadingLocation = false;
+      });
+    } else {
+      setState(() => _loadingLocation = false);
+    }
   }
 
   void _proceed() {
@@ -36,6 +63,8 @@ class _BookingScreenState extends State<BookingScreen> {
           builder: (_) => FareEstimateScreen(
             pickup: _pickupController.text,
             destination: _destinationController.text,
+            pickupLat: _currentPosition?.latitude ?? 5.6037,
+            pickupLng: _currentPosition?.longitude ?? -0.1870,
           ),
         ),
       );
@@ -79,9 +108,9 @@ class _BookingScreenState extends State<BookingScreen> {
                   children: [
                     Column(
                       children: [
-                        const Icon(Icons.circle, color: Color(0xFF4CAF50), size: 12),
-                        Container(
-                            width: 2, height: 30, color: Colors.white24),
+                        const Icon(Icons.circle,
+                            color: Color(0xFF4CAF50), size: 12),
+                        Container(width: 2, height: 30, color: Colors.white24),
                         const Icon(Icons.location_on,
                             color: Color(0xFFFFC107), size: 16),
                       ],
@@ -90,15 +119,40 @@ class _BookingScreenState extends State<BookingScreen> {
                     Expanded(
                       child: Column(
                         children: [
-                          TextField(
-                            controller: _pickupController,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: const InputDecoration(
-                              hintText: 'Pickup location',
-                              hintStyle: TextStyle(color: Colors.white38),
-                              border: InputBorder.none,
-                              isDense: true,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _pickupController,
+                                  style: const TextStyle(color: Colors.white),
+                                  decoration: InputDecoration(
+                                    hintText: _loadingLocation
+                                        ? 'Getting your location...'
+                                        : 'Pickup location',
+                                    hintStyle: const TextStyle(
+                                        color: Colors.white38),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                              if (_loadingLocation)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFFFFC107)),
+                                )
+                              else
+                                IconButton(
+                                  icon: const Icon(Icons.my_location,
+                                      color: Color(0xFFFFC107), size: 18),
+                                  onPressed: _fetchCurrentLocation,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                            ],
                           ),
                           const Divider(color: Colors.white12),
                           TextField(
@@ -162,7 +216,6 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
           ),
 
-          // Confirm button
           Padding(
             padding: const EdgeInsets.all(20),
             child: ElevatedButton(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/user_service.dart';
 import 'ride_request_screen.dart';
 
 class RiderHomeScreen extends StatefulWidget {
@@ -11,6 +12,20 @@ class RiderHomeScreen extends StatefulWidget {
 class _RiderHomeScreenState extends State<RiderHomeScreen> {
   bool _isOnline = false;
   int _selectedIndex = 0;
+  String _name = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadName();
+  }
+
+  void _loadName() async {
+    final data = await UserService().getCurrentUserData();
+    if (mounted && data != null) {
+      setState(() => _name = data['name'] ?? '');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,12 +64,12 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('YɛRide Rider',
+                  children: [
+                    const Text('YɛRide Rider',
                         style: TextStyle(color: Colors.white54, fontSize: 13)),
-                    SizedBox(height: 2),
-                    Text('Kwame Asante',
-                        style: TextStyle(
+                    const SizedBox(height: 2),
+                    Text(_name.isEmpty ? 'Rider' : _name,
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.bold)),

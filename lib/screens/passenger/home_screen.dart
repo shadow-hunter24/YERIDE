@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/user_service.dart';
 import 'booking_screen.dart';
 import 'trip_history_screen.dart';
 import 'profile_screen.dart';
@@ -42,8 +43,28 @@ class _PassengerHomeScreenState extends State<PassengerHomeScreen> {
   }
 }
 
-class _HomeContent extends StatelessWidget {
+class _HomeContent extends StatefulWidget {
   const _HomeContent();
+
+  @override
+  State<_HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<_HomeContent> {
+  String _name = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadName();
+  }
+
+  void _loadName() async {
+    final data = await UserService().getCurrentUserData();
+    if (mounted && data != null) {
+      setState(() => _name = data['name'] ?? '');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,13 +77,13 @@ class _HomeContent extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Good morning 👋',
-                        style: TextStyle(color: Colors.white54, fontSize: 13)),
-                    SizedBox(height: 2),
-                    Text('Where to?',
+                    Text('Good morning, ${_name.split(' ').first} 👋',
+                        style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                    const SizedBox(height: 2),
+                    const Text('Where to?',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 22,

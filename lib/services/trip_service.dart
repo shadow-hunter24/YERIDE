@@ -17,6 +17,7 @@ class TripService {
     required double destinationLng,
     required double distanceKm,
     required double fare,
+    String? assignedRiderId,
   }) async {
     final doc = await _db.collection('trips').add({
       'passengerId': _uid,
@@ -28,7 +29,8 @@ class TripService {
       'destinationLng': destinationLng,
       'distanceKm': distanceKm,
       'fare': fare,
-      'status': 'pending', // pending, accepted, ongoing, completed, cancelled
+      'status': 'pending',
+      'assignedRiderId': assignedRiderId,
       'riderId': null,
       'riderName': null,
       'createdAt': FieldValue.serverTimestamp(),
@@ -99,11 +101,12 @@ class TripService {
         .snapshots();
   }
 
-  // Get pending trips for riders (ride matching)
+  // Get pending trips assigned to this rider
   Stream<QuerySnapshot> getPendingTrips() {
     return _db
         .collection('trips')
         .where('status', isEqualTo: 'pending')
+        .where('assignedRiderId', isEqualTo: _uid)
         .orderBy('createdAt', descending: true)
         .snapshots();
   }

@@ -280,7 +280,10 @@ class _TripRequestCardState extends State<_TripRequestCard>
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                         ),
-                        onPressed: () {},
+                        onPressed: () async {
+                          await widget.tripService
+                              .updateTripStatus(widget.tripId, 'cancelled');
+                        },
                         child: const Text('Decline',
                             style: TextStyle(color: Colors.white54)),
                       ),

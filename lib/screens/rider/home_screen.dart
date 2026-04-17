@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/location_service.dart';
 import '../auth/login_screen.dart';
 import 'ride_request_screen.dart';
 
@@ -30,7 +33,33 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       setState(() {
         _userData = data;
         _name = data['name'] ?? '';
+        _isOnline = data['isOnline'] ?? false;
       });
+    }
+  }
+
+  Future<void> _toggleOnline() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final newStatus = !_isOnline;
+    setState(() => _isOnline = newStatus);
+
+    if (newStatus) {
+      // Save location when going online
+      final pos = await LocationService().getCurrentPosition();
+      await FirebaseFirestore.instance
+          .collection('riders')
+          .doc(uid)
+          .update({
+        'isOnline': true,
+        if (pos != null) 'lat': pos.latitude,
+        if (pos != null) 'lng': pos.longitude,
+      });
+    } else {
+      await FirebaseFirestore.instance
+          .collection('riders')
+          .doc(uid)
+          .update({'isOnline': false});
     }
   }
 
@@ -84,7 +113,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 ),
                 // Online toggle
                 GestureDetector(
-                  onTap: () => setState(() => _isOnline = !_isOnline),
+                  onTap: _toggleOnline,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 8),
@@ -327,13 +356,12 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
             _menuItem(Icons.help_outline, 'Help & Support'),
             _menuItem(Icons.logout, 'Logout', color: Colors.redAccent, onTap: () async {
               await AuthService().logout();
-              if (mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
+              if (!mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
             }),
           ],
         ),

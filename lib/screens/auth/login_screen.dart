@@ -5,7 +5,10 @@ import '../passenger/home_screen.dart';
 import '../rider/home_screen.dart' as rider;
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? prefillEmail;
+  final String? prefillPassword;
+
+  const LoginScreen({super.key, this.prefillEmail, this.prefillPassword});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -18,6 +21,17 @@ class _LoginScreenState extends State<LoginScreen> {
   final _authService = AuthService();
   bool _obscure = true;
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.prefillEmail != null) {
+      _emailController.text = widget.prefillEmail!;
+    }
+    if (widget.prefillPassword != null) {
+      _passwordController.text = widget.prefillPassword!;
+    }
+  }
 
   @override
   void dispose() {
@@ -37,6 +51,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (cred != null && mounted) {
         final role = await _authService.getUserRole(cred.user!.uid);
         if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Welcome back! Logged in successfully.'),
+            backgroundColor: Color(0xFF4CAF50),
+            duration: Duration(seconds: 2),
+          ),
+        );
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(

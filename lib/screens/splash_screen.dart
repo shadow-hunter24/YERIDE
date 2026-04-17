@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import 'onboarding_screen.dart';
-import 'auth/login_screen.dart';
 import 'passenger/home_screen.dart';
 import 'rider/home_screen.dart' as rider;
 

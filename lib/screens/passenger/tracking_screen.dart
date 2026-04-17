@@ -220,9 +220,10 @@ class _TrackingScreenState extends State<TrackingScreen> {
                                 borderRadius: BorderRadius.circular(12)),
                           ),
                           onPressed: () async {
+                            final nav = Navigator.of(context);
                             await _tripService.updateTripStatus(
                                 widget.tripId, 'cancelled');
-                            if (mounted) Navigator.pop(context);
+                            nav.pop();
                           },
                           child: const Text('Cancel Ride',
                               style: TextStyle(color: Colors.white54)),

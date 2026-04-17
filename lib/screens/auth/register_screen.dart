@@ -52,7 +52,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        MaterialPageRoute(
+          builder: (_) => LoginScreen(
+            prefillEmail: _emailController.text.trim(),
+            prefillPassword: _passwordController.text,
+          ),
+        ),
         (route) => false,
       );
     } catch (e) {

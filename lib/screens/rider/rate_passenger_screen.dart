@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import '../../services/trip_service.dart';
 import 'home_screen.dart';
 
 class RatePassengerScreen extends StatefulWidget {
-  const RatePassengerScreen({super.key});
+  final String tripId;
+  final double fare;
+
+  const RatePassengerScreen({
+    super.key,
+    required this.tripId,
+    required this.fare,
+  });
 
   @override
   State<RatePassengerScreen> createState() => _RatePassengerScreenState();
@@ -11,11 +19,59 @@ class RatePassengerScreen extends StatefulWidget {
 class _RatePassengerScreenState extends State<RatePassengerScreen> {
   int _rating = 0;
   final _commentController = TextEditingController();
+  final TripService _tripService = TripService();
+  bool _submitting = false;
+  final String _passengerName = 'Passenger';
+  String _passengerId = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTripData();
+  }
+
+  void _loadTripData() async {
+    final snap = await _tripService.listenToTrip(widget.tripId).first;
+    final data = snap.data() as Map<String, dynamic>?;
+    if (data != null && mounted) {
+      setState(() {
+        _passengerId = data['passengerId'] ?? '';
+      });
+    }
+  }
 
   @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
+  }
+
+  void _submit() async {
+    if (_rating == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a rating')),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      if (_passengerId.isNotEmpty) {
+        await _tripService.submitRating(
+          tripId: widget.tripId,
+          ratedUserId: _passengerId,
+          rating: _rating,
+          comment: _commentController.text,
+          raterRole: 'rider',
+        );
+      }
+    } catch (_) {}
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const RiderHomeScreen()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -48,11 +104,12 @@ class _RatePassengerScreenState extends State<RatePassengerScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _tripStat('Earned', 'GH₵ 8.00'),
-                        Container(width: 1, height: 30, color: Colors.white12),
-                        _tripStat('Distance', '3.2 km'),
-                        Container(width: 1, height: 30, color: Colors.white12),
-                        _tripStat('Duration', '12 min'),
+                        _tripStat('Earned',
+                            'GH₵ ${widget.fare.toStringAsFixed(2)}'),
+                        Container(
+                            width: 1, height: 30, color: Colors.white12),
+                        _tripStat('Trip ID',
+                            '#${widget.tripId.substring(0, 6).toUpperCase()}'),
                       ],
                     ),
                   ],
@@ -67,8 +124,8 @@ class _RatePassengerScreenState extends State<RatePassengerScreen> {
                 child: Text('👤', style: TextStyle(fontSize: 36)),
               ),
               const SizedBox(height: 12),
-              const Text('Ama Korantema',
-                  style: TextStyle(
+              Text(_passengerName,
+                  style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold)),
@@ -94,7 +151,7 @@ class _RatePassengerScreenState extends State<RatePassengerScreen> {
                   );
                 }),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // Quick tags
               Wrap(
@@ -128,24 +185,24 @@ class _RatePassengerScreenState extends State<RatePassengerScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () => Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const RiderHomeScreen()),
-                  (route) => false,
-                ),
-                child: const Text('Submit & Go Online',
-                    style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold)),
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.black, strokeWidth: 2))
+                    : const Text('Submit & Go Online',
+                        style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () => Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => const RiderHomeScreen()),
+                  MaterialPageRoute(builder: (_) => const RiderHomeScreen()),
                   (route) => false,
                 ),
                 child: const Text('Skip',

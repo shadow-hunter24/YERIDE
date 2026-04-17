@@ -70,10 +70,10 @@ class TripHistoryScreen extends StatelessWidget {
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: completed
-                                ? const Color(0xFF4CAF50).withOpacity(0.15)
+                                ? const Color(0xFF4CAF50).withValues(alpha: 0.15)
                                 : status == 'cancelled'
-                                    ? Colors.red.withOpacity(0.15)
-                                    : Colors.orange.withOpacity(0.15),
+                                    ? Colors.red.withValues(alpha: 0.15)
+                                    : Colors.orange.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(

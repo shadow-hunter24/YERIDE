@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../services/user_service.dart';
+import '../../services/auth_service.dart';
+import '../auth/login_screen.dart';
 import 'ride_request_screen.dart';
 
 class RiderHomeScreen extends StatefulWidget {
@@ -14,17 +16,21 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   bool _isOnline = false;
   int _selectedIndex = 0;
   String _name = '';
+  Map<String, dynamic>? _userData;
 
   @override
   void initState() {
     super.initState();
-    _loadName();
+    _loadUserData();
   }
 
-  void _loadName() async {
+  void _loadUserData() async {
     final data = await UserService().getCurrentUserData();
     if (mounted && data != null) {
-      setState(() => _name = data['name'] ?? '');
+      setState(() {
+        _userData = data;
+        _name = data['name'] ?? '';
+      });
     }
   }
 
@@ -84,7 +90,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                         horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: _isOnline
-                          ? const Color(0xFF4CAF50).withOpacity(0.2)
+                          ? const Color(0xFF4CAF50).withValues(alpha: 0.2)
                           : const Color(0xFF1E1E1E),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
@@ -165,7 +171,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const RideRequestScreen()),
+                            builder: (_) => RideRequestScreen()),
                       ),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -179,7 +185,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                           children: [
                             Icon(Icons.wifi, color: Colors.white, size: 16),
                             SizedBox(width: 8),
-                            Text('You are online — tap to simulate request',
+                            Text('You are online — tap to view requests',
                                 style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -199,6 +205,9 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   }
 
   Widget _buildEarnings() {
+    final totalEarnings = (_userData?['totalEarnings'] ?? 0.0).toStringAsFixed(2);
+    final totalTrips = _userData?['totalTrips'] ?? 0;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -218,19 +227,19 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 color: const Color(0xFFFFC107),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Column(
+              child: Column(
                 children: [
-                  Text('Total Earnings',
+                  const Text('Total Earnings',
                       style: TextStyle(color: Colors.black54, fontSize: 13)),
-                  SizedBox(height: 8),
-                  Text('GH₵ 340.00',
-                      style: TextStyle(
+                  const SizedBox(height: 8),
+                  Text('GH₵ $totalEarnings',
+                      style: const TextStyle(
                           color: Colors.black,
                           fontSize: 36,
                           fontWeight: FontWeight.bold)),
-                  SizedBox(height: 4),
-                  Text('This week',
-                      style: TextStyle(color: Colors.black54, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Text('$totalTrips trips completed',
+                      style: const TextStyle(color: Colors.black54, fontSize: 12)),
                 ],
               ),
             ),
@@ -258,6 +267,13 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   }
 
   Widget _buildRiderProfile() {
+    final data = _userData;
+    final name = data?['name'] ?? _name;
+    final phone = data?['phone'] ?? '';
+    final rating = (data?['rating'] ?? 0.0).toStringAsFixed(1);
+    final totalTrips = data?['totalTrips'] ?? 0;
+    final isVerified = data?['isVerified'] ?? false;
+
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -269,45 +285,56 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               child: Text('🏍', style: TextStyle(fontSize: 40)),
             ),
             const SizedBox(height: 12),
-            const Text('Kwame Asante',
-                style: TextStyle(
+            Text(name,
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            const Text('+233 24 000 0000',
-                style: TextStyle(color: Colors.white54)),
+            Text(phone, style: const TextStyle(color: Colors.white54)),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.star, color: Color(0xFFFFC107), size: 16),
-                SizedBox(width: 4),
-                Text('4.8',
-                    style: TextStyle(
+              children: [
+                const Icon(Icons.star, color: Color(0xFFFFC107), size: 16),
+                const SizedBox(width: 4),
+                Text(rating,
+                    style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.bold)),
-                SizedBox(width: 4),
-                Text('· 142 trips',
-                    style: TextStyle(color: Colors.white54)),
+                const SizedBox(width: 4),
+                Text('· $totalTrips trips',
+                    style: const TextStyle(color: Colors.white54)),
               ],
             ),
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
+            if (isVerified)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text('✓ Verified Rider',
+                    style: TextStyle(
+                        color: Color(0xFF4CAF50),
+                        fontWeight: FontWeight.bold)),
               ),
-              child: const Text('✓ Verified Rider',
-                  style: TextStyle(
-                      color: Color(0xFF4CAF50), fontWeight: FontWeight.bold)),
-            ),
             const SizedBox(height: 32),
             _menuItem(Icons.directions_bike, 'My Vehicle'),
             _menuItem(Icons.document_scanner, 'Documents'),
             _menuItem(Icons.account_balance_wallet_outlined, 'Payout Settings'),
             _menuItem(Icons.help_outline, 'Help & Support'),
-            _menuItem(Icons.logout, 'Logout', color: Colors.redAccent),
+            _menuItem(Icons.logout, 'Logout', color: Colors.redAccent, onTap: () async {
+              await AuthService().logout();
+              if (mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            }),
           ],
         ),
       ),
@@ -392,7 +419,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     );
   }
 
-  Widget _menuItem(IconData icon, String title, {Color color = Colors.white}) {
+  Widget _menuItem(IconData icon, String title, {Color color = Colors.white, VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -406,7 +433,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         trailing: color == Colors.white
             ? const Icon(Icons.chevron_right, color: Colors.white24)
             : null,
-        onTap: () {},
+        onTap: onTap ?? () {},
       ),
     );
   }

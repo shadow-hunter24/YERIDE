@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 import '../../services/user_service.dart';
 import '../../services/location_service.dart';
 import 'booking_screen.dart';

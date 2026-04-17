@@ -309,7 +309,7 @@ class _FareEstimateScreenState extends State<FareEstimateScreen> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFFFFC107).withOpacity(0.1)
+              ? const Color(0xFFFFC107).withValues(alpha: 0.1)
               : const Color(0xFF1E1E1E),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(

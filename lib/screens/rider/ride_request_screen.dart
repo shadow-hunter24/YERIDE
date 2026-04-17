@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/trip_service.dart';
+import '../../services/user_service.dart';
 import 'navigation_screen.dart';
 
 class RideRequestScreen extends StatefulWidget {
@@ -8,25 +11,99 @@ class RideRequestScreen extends StatefulWidget {
   State<RideRequestScreen> createState() => _RideRequestScreenState();
 }
 
-class _RideRequestScreenState extends State<RideRequestScreen>
+class _RideRequestScreenState extends State<RideRequestScreen> {
+  final TripService _tripService = TripService();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF121212),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Incoming Requests',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _tripService.getPendingTrips(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+                child: CircularProgressIndicator(color: Color(0xFFFFC107)));
+          }
+          final trips = snapshot.data?.docs ?? [];
+          if (trips.isEmpty) {
+            return const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('🏍', style: TextStyle(fontSize: 48)),
+                  SizedBox(height: 12),
+                  Text('No ride requests yet',
+                      style: TextStyle(color: Colors.white54, fontSize: 16)),
+                  SizedBox(height: 6),
+                  Text('Waiting for passengers...',
+                      style: TextStyle(color: Colors.white38, fontSize: 13)),
+                ],
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: trips.length,
+            itemBuilder: (_, i) {
+              final trip = trips[i].data() as Map<String, dynamic>;
+              final tripId = trips[i].id;
+              return _TripRequestCard(
+                tripId: tripId,
+                trip: trip,
+                tripService: _tripService,
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TripRequestCard extends StatefulWidget {
+  final String tripId;
+  final Map<String, dynamic> trip;
+  final TripService tripService;
+
+  const _TripRequestCard({
+    required this.tripId,
+    required this.trip,
+    required this.tripService,
+  });
+
+  @override
+  State<_TripRequestCard> createState() => _TripRequestCardState();
+}
+
+class _TripRequestCardState extends State<_TripRequestCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  int _countdown = 15;
+  int _countdown = 30;
+  bool _accepting = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 15),
+      duration: const Duration(seconds: 30),
     )..forward();
 
-    // Countdown timer
-    Stream.periodic(const Duration(seconds: 1), (i) => i).take(15).listen((i) {
-      if (mounted) {
-        setState(() => _countdown = 14 - i);
-        if (_countdown <= 0) _decline();
-      }
+    Stream.periodic(const Duration(seconds: 1), (i) => i)
+        .take(30)
+        .listen((i) {
+      if (mounted) setState(() => _countdown = 29 - i);
     });
   }
 
@@ -36,176 +113,209 @@ class _RideRequestScreenState extends State<RideRequestScreen>
     super.dispose();
   }
 
-  void _accept() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const NavigationScreen()),
-    );
-  }
-
-  void _decline() {
-    if (mounted) Navigator.pop(context);
+  void _accept() async {
+    setState(() => _accepting = true);
+    try {
+      final userData = await UserService().getCurrentUserData();
+      final riderName = userData?['name'] ?? 'Rider';
+      await widget.tripService.acceptTrip(widget.tripId, riderName);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => NavigationScreen(
+            tripId: widget.tripId,
+            pickup: widget.trip['pickupAddress'] ?? '',
+            destination: widget.trip['destinationAddress'] ?? '',
+            fare: (widget.trip['fare'] as num?)?.toDouble() ?? 0.0,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to accept: $e'),
+              backgroundColor: Colors.redAccent),
+        );
+        setState(() => _accepting = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black54,
-      body: Center(
-        child: Container(
-          margin: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Top bar with countdown
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFC107),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final pickup = widget.trip['pickupAddress'] ?? '';
+    final destination = widget.trip['destinationAddress'] ?? '';
+    final fare = (widget.trip['fare'] as num?)?.toStringAsFixed(2) ?? '0.00';
+    final distance = (widget.trip['distanceKm'] as num?)?.toStringAsFixed(1) ?? '0';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFC107).withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          // Header with countdown
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFC107),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('New Ride Request!',
+                    style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15)),
+                Stack(
+                  alignment: Alignment.center,
                   children: [
-                    const Text('New Ride Request!',
-                        style: TextStyle(
+                    SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: AnimatedBuilder(
+                        animation: _controller,
+                        builder: (_, a) => CircularProgressIndicator(
+                          value: 1 - _controller.value,
+                          color: Colors.black,
+                          backgroundColor: Colors.black26,
+                          strokeWidth: 3,
+                        ),
+                      ),
+                    ),
+                    Text('$_countdown',
+                        style: const TextStyle(
                             color: Colors.black,
                             fontWeight: FontWeight.bold,
-                            fontSize: 16)),
-                    // Countdown circle
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: AnimatedBuilder(
-                            animation: _controller,
-                            builder: (_, __) => CircularProgressIndicator(
-                              value: 1 - _controller.value,
-                              color: Colors.black,
-                              backgroundColor: Colors.black26,
-                              strokeWidth: 3,
-                            ),
-                          ),
-                        ),
-                        Text('$_countdown',
-                            style: const TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13)),
-                      ],
+                            fontSize: 12)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Fare
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFC107).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: const Color(0xFFFFC107).withValues(alpha: 0.3)),
+                  ),
+                  child: Text('GH₵ $fare',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Color(0xFFFFC107),
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 14),
+
+                // Route
+                Row(
+                  children: [
+                    const Icon(Icons.circle, color: Color(0xFF4CAF50), size: 12),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(pickup,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 13),
+                          overflow: TextOverflow.ellipsis),
                     ),
                   ],
                 ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
+                Padding(
+                  padding: const EdgeInsets.only(left: 5),
+                  child: Container(width: 2, height: 16, color: Colors.white12),
+                ),
+                Row(
                   children: [
-                    // Fare highlight
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFC107).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: const Color(0xFFFFC107).withOpacity(0.3)),
-                      ),
-                      child: const Text('GH₵ 8.00',
-                          style: TextStyle(
-                              color: Color(0xFFFFC107),
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold)),
+                    const Icon(Icons.location_on,
+                        color: Color(0xFFFFC107), size: 14),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(destination,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 13),
+                          overflow: TextOverflow.ellipsis),
                     ),
-                    const SizedBox(height: 20),
+                  ],
+                ),
+                const SizedBox(height: 14),
 
-                    // Route
-                    _routeRow(Icons.circle, const Color(0xFF4CAF50),
-                        'Kaneshie Market'),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 7),
-                      child: Container(
-                          width: 2, height: 20, color: Colors.white12),
-                    ),
-                    _routeRow(Icons.location_on, const Color(0xFFFFC107),
-                        'Accra Mall, Spintex'),
-                    const SizedBox(height: 20),
+                // Details
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _detail(Icons.straighten, '$distance km'),
+                    Container(width: 1, height: 28, color: Colors.white12),
+                    _detail(Icons.access_time,
+                        '~${(double.tryParse(distance) ?? 0 * 3).round()} min'),
+                    Container(width: 1, height: 28, color: Colors.white12),
+                    _detail(Icons.payments_outlined, 'GH₵ $fare'),
+                  ],
+                ),
+                const SizedBox(height: 16),
 
-                    // Trip details
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _detail(Icons.straighten, '3.2 km'),
-                        Container(
-                            width: 1, height: 30, color: Colors.white12),
-                        _detail(Icons.access_time, '~12 min'),
-                        Container(
-                            width: 1, height: 30, color: Colors.white12),
-                        _detail(Icons.person_outline, 'Ama K.'),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Accept / Decline buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Colors.white24),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: _decline,
-                            child: const Text('Decline',
-                                style: TextStyle(color: Colors.white54)),
-                          ),
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.white24),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFFC107),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: _accept,
-                            child: const Text('Accept',
+                        onPressed: () {},
+                        child: const Text('Decline',
+                            style: TextStyle(color: Colors.white54)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFC107),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: _accepting ? null : _accept,
+                        child: _accepting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    color: Colors.black, strokeWidth: 2))
+                            : const Text('Accept',
                                 style: TextStyle(
                                     color: Colors.black,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 16)),
-                          ),
-                        ),
-                      ],
+                                    fontSize: 15)),
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _routeRow(IconData icon, Color color, String text) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 14),
-        const SizedBox(width: 10),
-        Text(text, style: const TextStyle(color: Colors.white, fontSize: 14)),
-      ],
     );
   }
 
@@ -214,8 +324,7 @@ class _RideRequestScreenState extends State<RideRequestScreen>
       children: [
         Icon(icon, color: const Color(0xFFFFC107), size: 18),
         const SizedBox(height: 4),
-        Text(value,
-            style: const TextStyle(color: Colors.white, fontSize: 12)),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 12)),
       ],
     );
   }

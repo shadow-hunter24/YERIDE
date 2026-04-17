@@ -86,14 +86,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _menuItem(
                     Icons.logout, 'Logout',
                     () async {
+                      final nav = Navigator.of(context);
                       await AuthService().logout();
-                      if (mounted) {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (_) => const LoginScreen()),
-                          (route) => false,
-                        );
-                      }
+                      nav.pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        (route) => false,
+                      );
                     },
                     color: Colors.redAccent,
                   ),

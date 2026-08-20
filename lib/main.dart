@@ -1,12 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'services/notification_service.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  await NotificationService().initialize();
+
+  if (kIsWeb) {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyA6DjNT03SYaan6WGjwvMy6dKqhUFdPxtw",
+        authDomain: "yeride-e8966.firebaseapp.com",
+        databaseURL: "https://yeride-e8966-default-rtdb.firebaseio.com",
+        projectId: "yeride-e8966",
+        storageBucket: "yeride-e8966.firebasestorage.app",
+        messagingSenderId: "33526722996",
+        appId: "1:33526722996:web:3dab236173fab4732802e1",
+        measurementId: "G-T8M92DQRQ0",
+      ),
+    );
+  } else {
+    await Firebase.initializeApp();
+  }
+
+  if (!kIsWeb) {
+    await NotificationService().initialize();
+  }
+
   runApp(const YerideApp());
 }
 

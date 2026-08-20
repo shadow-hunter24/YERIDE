@@ -162,9 +162,9 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               children: [
                 _statCard('Today', 'GH₵ 0.00', Icons.payments_outlined),
                 const SizedBox(width: 12),
-                _statCard('Trips', '0', Icons.electric_moped),
+                _statCard('Trips', '${_userData?['totalTrips'] ?? 0}', Icons.electric_moped),
                 const SizedBox(width: 12),
-                _statCard('Rating', '4.8 ⭐', Icons.star_outline),
+                _statCard('Rating', '${(_userData?['rating'] ?? 0.0).toStringAsFixed(1)} ⭐', Icons.star_outline),
               ],
             ),
           ),
@@ -234,65 +234,149 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   }
 
   Widget _buildEarnings() {
-    final totalEarnings = (_userData?['totalEarnings'] ?? 0.0).toStringAsFixed(2);
-    final totalTrips = _userData?['totalTrips'] ?? 0;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final monthStart = DateTime(now.year, now.month, 1);
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Earnings',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFC107),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  const Text('Total Earnings',
-                      style: TextStyle(color: Colors.black54, fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Text('GH₵ $totalEarnings',
-                      style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('$totalTrips trips completed',
-                      style: const TextStyle(color: Colors.black54, fontSize: 12)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('trips')
+            .where('riderId', isEqualTo: uid)
+            .where('status', isEqualTo: 'completed')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          final trips = snapshot.data?.docs ?? [];
+
+          // Calculate earnings
+          double totalEarnings = (_userData?['totalEarnings'] ?? 0.0).toDouble();
+          double todayEarnings = 0;
+          double monthEarnings = 0;
+
+          for (final doc in trips) {
+            final data = doc.data() as Map<String, dynamic>;
+            final fare = (data['fare'] as num?)?.toDouble() ?? 0.0;
+            final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
+            if (createdAt != null) {
+              if (createdAt.isAfter(todayStart)) todayEarnings += fare;
+              if (createdAt.isAfter(monthStart)) monthEarnings += fare;
+            }
+          }
+
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: _earningCard('Today', 'GH₵ 0.00')),
-                const SizedBox(width: 12),
-                Expanded(child: _earningCard('This Month', 'GH₵ 1,240.00')),
+                const Text('Earnings',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+
+                // Total earnings card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFC107),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      const Text('Total Earnings',
+                          style: TextStyle(color: Colors.black54, fontSize: 13)),
+                      const SizedBox(height: 8),
+                      Text('GH₵ ${totalEarnings.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                              color: Colors.black,
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text('${trips.length} trips completed',
+                          style: const TextStyle(
+                              color: Colors.black54, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Today / This Month
+                Row(
+                  children: [
+                    Expanded(
+                        child: _earningCard(
+                            'Today',
+                            'GH₵ ${todayEarnings.toStringAsFixed(2)}')),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _earningCard(
+                            'This Month',
+                            'GH₵ ${monthEarnings.toStringAsFixed(2)}')),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                const Text('Recent Trips',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+
+                // Real recent trips
+                Expanded(
+                  child: trips.isEmpty
+                      ? const Center(
+                          child: Text('No completed trips yet',
+                              style: TextStyle(
+                                  color: Colors.white38, fontSize: 14)),
+                        )
+                      : ListView.builder(
+                          itemCount: trips.length > 10 ? 10 : trips.length,
+                          itemBuilder: (_, i) {
+                            final data =
+                                trips[i].data() as Map<String, dynamic>;
+                            final pickup =
+                                data['pickupAddress'] ?? '';
+                            final dest =
+                                data['destinationAddress'] ?? '';
+                            final fare =
+                                (data['fare'] as num?)?.toStringAsFixed(2) ??
+                                    '0.00';
+                            final createdAt =
+                                (data['createdAt'] as Timestamp?)
+                                    ?.toDate();
+                            final time = createdAt != null
+                                ? _formatTime(createdAt)
+                                : '';
+                            return _earningTrip(
+                                '$pickup → $dest', 'GH₵ $fare', time);
+                          },
+                        ),
+                ),
               ],
             ),
-            const SizedBox(height: 20),
-            const Text('Recent Trips',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            _earningTrip('Kaneshie → Accra Mall', 'GH₵ 8.00', 'Today 9:14 AM'),
-            _earningTrip('Legon → Tema Station', 'GH₵ 15.00', 'Yesterday'),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  String _formatTime(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inDays == 0) {
+      final h = date.hour > 12 ? date.hour - 12 : date.hour;
+      final m = date.minute.toString().padLeft(2, '0');
+      final p = date.hour >= 12 ? 'PM' : 'AM';
+      return 'Today $h:$m $p';
+    }
+    if (diff.inDays == 1) return 'Yesterday';
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   Widget _buildRiderProfile() {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../services/trip_service.dart';
+import '../../services/map_service.dart';
 import 'rating_screen.dart';
 
 class TrackingScreen extends StatefulWidget {
@@ -24,6 +25,13 @@ class TrackingScreen extends StatefulWidget {
 
 class _TrackingScreenState extends State<TrackingScreen> {
   final _tripService = TripService();
+  final _mapService = MapService();
+  GoogleMapController? _mapController;
+  Set<Polyline> _polylines = {};
+  Set<Marker> _markers = {};
+  LatLng? _pickupLatLng;
+  LatLng? _riderLatLng;
+  bool _routeLoaded = false;
 
   String _statusLabel(String status) {
     switch (status) {
@@ -57,6 +65,83 @@ class _TrackingScreenState extends State<TrackingScreen> {
     'Trip in progress',
   ];
 
+  Future<void> _drawRoute(Map<String, dynamic> data) async {
+    final pickupLat = (data['pickupLat'] as num?)?.toDouble();
+    final pickupLng = (data['pickupLng'] as num?)?.toDouble();
+    final riderLat = (data['riderLat'] as num?)?.toDouble();
+    final riderLng = (data['riderLng'] as num?)?.toDouble();
+    final destLat = (data['destinationLat'] as num?)?.toDouble();
+    final destLng = (data['destinationLng'] as num?)?.toDouble();
+    final status = data['status'] ?? 'pending';
+
+    if (pickupLat == null || pickupLng == null) return;
+
+    final pickup = LatLng(pickupLat, pickupLng);
+    _pickupLatLng = pickup;
+
+    LatLng? origin;
+    LatLng? destination;
+
+    if (status == 'ongoing' && destLat != null && destLng != null) {
+      // Trip in progress: show rider → destination
+      if (riderLat != null && riderLng != null) {
+        origin = LatLng(riderLat, riderLng);
+        destination = LatLng(destLat, destLng);
+      }
+    } else if (riderLat != null && riderLng != null) {
+      // Rider coming to pickup
+      origin = LatLng(riderLat, riderLng);
+      destination = pickup;
+      _riderLatLng = origin;
+    }
+
+    if (origin == null || destination == null) {
+      // Just show pickup marker
+      setState(() {
+        _markers = {
+          Marker(
+            markerId: const MarkerId('pickup'),
+            position: pickup,
+            infoWindow: InfoWindow(title: widget.pickup),
+          ),
+        };
+      });
+      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(pickup, 15));
+      return;
+    }
+
+    final points = await _mapService.getRoutePoints(origin, destination);
+
+    if (!mounted) return;
+    setState(() {
+      _polylines = {
+        Polyline(
+          polylineId: const PolylineId('route'),
+          points: points.isNotEmpty ? points : [origin!, destination!],
+          color: const Color(0xFFFFC107),
+          width: 4,
+        ),
+      };
+      _markers = {
+        Marker(
+          markerId: const MarkerId('origin'),
+          position: origin!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: const InfoWindow(title: 'Rider'),
+        ),
+        Marker(
+          markerId: const MarkerId('destination'),
+          position: destination!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+          infoWindow: InfoWindow(title: widget.pickup),
+        ),
+      };
+    });
+
+    _mapController?.animateCamera(MapService.fitBounds(origin, destination));
+    _routeLoaded = true;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -68,6 +153,28 @@ class _TrackingScreenState extends State<TrackingScreen> {
           final status = data?['status'] ?? 'pending';
           final riderName = data?['riderName'] ?? 'Finding rider...';
           final currentStep = _stepIndex(status);
+
+          // Draw route when data changes
+          if (data != null && !_routeLoaded) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _drawRoute(data);
+            });
+          }
+
+          // Update rider marker position live
+          if (data != null && _routeLoaded) {
+            final riderLat = (data['riderLat'] as num?)?.toDouble();
+            final riderLng = (data['riderLng'] as num?)?.toDouble();
+            if (riderLat != null && riderLng != null) {
+              final newRiderPos = LatLng(riderLat, riderLng);
+              if (newRiderPos != _riderLatLng) {
+                _riderLatLng = newRiderPos;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _drawRoute(data);
+                });
+              }
+            }
+          }
 
           // Auto navigate to rating when completed
           if (status == 'completed') {
@@ -86,17 +193,25 @@ class _TrackingScreenState extends State<TrackingScreen> {
             });
           }
 
+          final initialPos = _pickupLatLng ?? const LatLng(5.6037, -0.1870);
+
           return Stack(
             children: [
-              // Live Map
+              // Live Map with route
               GoogleMap(
-                initialCameraPosition: const CameraPosition(
-                  target: LatLng(5.6037, -0.1870),
+                initialCameraPosition: CameraPosition(
+                  target: initialPos,
                   zoom: 15,
                 ),
                 myLocationEnabled: true,
                 myLocationButtonEnabled: false,
                 zoomControlsEnabled: false,
+                polylines: _polylines,
+                markers: _markers,
+                onMapCreated: (c) {
+                  _mapController = c;
+                  if (data != null) _drawRoute(data);
+                },
               ),
 
               // Back button

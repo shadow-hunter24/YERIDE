@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/trip_service.dart';
 import 'home_screen.dart';
 
@@ -21,8 +22,9 @@ class _RatePassengerScreenState extends State<RatePassengerScreen> {
   final _commentController = TextEditingController();
   final TripService _tripService = TripService();
   bool _submitting = false;
-  final String _passengerName = 'Passenger';
+  String _passengerName = 'Passenger';
   String _passengerId = '';
+  final Set<String> _selectedTags = {};
 
   @override
   void initState() {
@@ -34,9 +36,20 @@ class _RatePassengerScreenState extends State<RatePassengerScreen> {
     final snap = await _tripService.listenToTrip(widget.tripId).first;
     final data = snap.data() as Map<String, dynamic>?;
     if (data != null && mounted) {
-      setState(() {
-        _passengerId = data['passengerId'] ?? '';
-      });
+      final pid = data['passengerId'] ?? '';
+      setState(() => _passengerId = pid);
+
+      // Fetch passenger's real name from users collection
+      if (pid.isNotEmpty) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(pid)
+            .get();
+        final name = userDoc.data()?['name'] as String?;
+        if (name != null && name.isNotEmpty && mounted) {
+          setState(() => _passengerName = name.split(' ').first);
+        }
+      }
     }
   }
 
@@ -56,11 +69,21 @@ class _RatePassengerScreenState extends State<RatePassengerScreen> {
     setState(() => _submitting = true);
     try {
       if (_passengerId.isNotEmpty) {
+        // Combine typed comment with selected tags
+        final tagText = _selectedTags.isNotEmpty
+            ? _selectedTags.join(', ')
+            : '';
+        final fullComment = [
+          if (_commentController.text.trim().isNotEmpty)
+            _commentController.text.trim(),
+          if (tagText.isNotEmpty) tagText,
+        ].join(' · ');
+
         await _tripService.submitRating(
           tripId: widget.tripId,
           ratedUserId: _passengerId,
           rating: _rating,
-          comment: _commentController.text,
+          comment: fullComment,
           raterRole: 'rider',
         );
       }
@@ -159,21 +182,37 @@ class _RatePassengerScreenState extends State<RatePassengerScreen> {
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: ['Polite', 'On time', 'Clear directions', 'Good tipper']
-                    .map((tag) => GestureDetector(
-                          onTap: () {},
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1E1E1E),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.white12),
+                    .map((tag) {
+                      final selected = _selectedTags.contains(tag);
+                      return GestureDetector(
+                        onTap: () => setState(() {
+                          selected
+                              ? _selectedTags.remove(tag)
+                              : _selectedTags.add(tag);
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFFFFC107).withValues(alpha: 0.15)
+                                : const Color(0xFF1E1E1E),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: selected
+                                  ? const Color(0xFFFFC107)
+                                  : Colors.white12,
                             ),
-                            child: Text(tag,
-                                style: const TextStyle(
-                                    color: Colors.white54, fontSize: 13)),
                           ),
-                        ))
+                          child: Text(tag,
+                              style: TextStyle(
+                                  color: selected
+                                      ? const Color(0xFFFFC107)
+                                      : Colors.white54,
+                                  fontSize: 13)),
+                        ),
+                      );
+                    })
                     .toList(),
               ),
               const Spacer(),

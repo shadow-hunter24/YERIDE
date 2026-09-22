@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/trip_service.dart';
 import '../../services/map_service.dart';
 import 'rating_screen.dart';
@@ -32,6 +33,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
   LatLng? _pickupLatLng;
   LatLng? _riderLatLng;
   bool _routeLoaded = false;
+  String? _riderPhone;
 
   String _statusLabel(String status) {
     switch (status) {
@@ -64,6 +66,32 @@ class _TrackingScreenState extends State<TrackingScreen> {
     'Rider arrived',
     'Trip in progress',
   ];
+
+  Future<void> _callRider(String? riderId) async {
+    // Fetch phone lazily — only once we have a riderId
+    if (_riderPhone == null && riderId != null && riderId.isNotEmpty) {
+      final doc = await FirebaseFirestore.instance
+          .collection('riders')
+          .doc(riderId)
+          .get();
+      _riderPhone = (doc.data()?['phone'] as String?)?.trim();
+    }
+    if (_riderPhone == null || _riderPhone!.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rider phone number not available'),
+            backgroundColor: Color(0xFF1E1E1E),
+          ),
+        );
+      }
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: _riderPhone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
 
   Future<void> _drawRoute(Map<String, dynamic> data) async {
     final pickupLat = (data['pickupLat'] as num?)?.toDouble();
@@ -278,7 +306,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                             ),
                           ),
                           IconButton(
-                            onPressed: () {},
+                            onPressed: () => _callRider(data?['riderId']),
                             icon: const Icon(Icons.call,
                                 color: Color(0xFFFFC107)),
                           ),

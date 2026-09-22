@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/trip_service.dart';
 import '../../services/location_service.dart';
 import '../../services/map_service.dart';
@@ -37,6 +39,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   LatLng? _destinationLatLng;
   StreamSubscription? _locationSub;
   bool _loading = false;
+  String? _passengerPhone;
 
   List<Map<String, String>> get _steps => [
         {'label': 'Head to pickup point', 'sub': widget.pickup},
@@ -54,6 +57,37 @@ class _NavigationScreenState extends State<NavigationScreen> {
   void dispose() {
     _locationSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _callPassenger() async {
+    if (_passengerPhone == null) {
+      // Fetch passengerId from trip, then phone from users collection
+      final snap = await _tripService.listenToTrip(widget.tripId).first;
+      final data = snap.data() as Map<String, dynamic>?;
+      final passengerId = data?['passengerId'] as String?;
+      if (passengerId != null && passengerId.isNotEmpty) {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(passengerId)
+            .get();
+        _passengerPhone = (doc.data()?['phone'] as String?)?.trim();
+      }
+    }
+    if (_passengerPhone == null || _passengerPhone!.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Passenger phone number not available'),
+            backgroundColor: Color(0xFF1E1E1E),
+          ),
+        );
+      }
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: _passengerPhone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 
   void _initLocation() async {
@@ -264,7 +298,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                         ),
                       ),
                       IconButton(
-                        onPressed: () {},
+                        onPressed: _callPassenger,
                         icon: const Icon(Icons.call,
                             color: Color(0xFFFFC107)),
                       ),

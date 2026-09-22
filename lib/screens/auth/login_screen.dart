@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import 'register_screen.dart';
 import '../passenger/home_screen.dart';
 import '../rider/home_screen.dart' as rider;
@@ -49,6 +50,9 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       if (cred != null && mounted) {
+        // Save FCM token now that we know the uid
+        await NotificationService().saveTokenAfterLogin();
+
         final role = await _authService.getUserRole(cred.user!.uid);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -78,6 +82,37 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter your email above first'),
+          backgroundColor: Color(0xFF1E1E1E),
+        ),
+      );
+      return;
+    }
+    try {
+      await _authService.sendPasswordReset(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset email sent. Check your inbox.'),
+          backgroundColor: Color(0xFF4CAF50),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyError(e.toString())),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -138,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {},
+                    onPressed: _forgotPassword,
                     child: const Text('Forgot password?',
                         style: TextStyle(color: Color(0xFFFFC107))),
                   ),

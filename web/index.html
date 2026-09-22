@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="YɛRide - Fast. Safe. Affordable.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="YɛRide">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <title>YɛRide</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getMessaging } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA6DjNT03SYaan6WGjwvMy6dKqhUFdPxtw",
+      authDomain: "yeride-e8966.firebaseapp.com",
+      databaseURL: "https://yeride-e8966-default-rtdb.firebaseio.com",
+      projectId: "yeride-e8966",
+      storageBucket: "yeride-e8966.firebasestorage.app",
+      messagingSenderId: "33526722996",
+      appId: "1:33526722996:web:3dab236173fab4732802e1",
+      measurementId: "G-T8M92DQRQ0"
+    };
+
+    const app = initializeApp(firebaseConfig);
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

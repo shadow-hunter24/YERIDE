@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
+import '../shared/edit_profile_screen.dart';
+import '../shared/notifications_screen.dart';
+import '../shared/help_screen.dart';
+import '../shared/about_screen.dart';
+import '../shared/safety_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -76,12 +81,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  _menuItem(Icons.person_outline, 'Edit Profile', () {}),
-                  _menuItem(Icons.payment, 'Payment Methods', () {}),
-                  _menuItem(Icons.notifications_outlined, 'Notifications', () {}),
-                  _menuItem(Icons.security, 'Safety', () {}),
-                  _menuItem(Icons.help_outline, 'Help & Support', () {}),
-                  _menuItem(Icons.info_outline, 'About YɛRide', () {}),
+                  _menuItem(Icons.person_outline, 'Edit Profile', () async {
+                    final updated = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditProfileScreen(
+                          collection: 'users',
+                          currentName: _userData?['name'] ?? '',
+                          currentPhone: _userData?['phone'] ?? '',
+                        ),
+                      ),
+                    );
+                    if (updated == true) _loadProfile();
+                  }),
+                  _menuItem(Icons.payment, 'Payment Methods', () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Payment methods managed from the Payments tab'),
+                        backgroundColor: Color(0xFF1E1E1E),
+                      ),
+                    );
+                  }),
+                  _menuItem(Icons.notifications_outlined, 'Notifications', () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationsScreen(collection: 'users'),
+                      ),
+                    );
+                  }),
+                  _menuItem(Icons.security, 'Safety', () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SafetyScreen()),
+                    );
+                  }),
+                  _menuItem(Icons.help_outline, 'Help & Support', () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HelpScreen()),
+                    );
+                  }),
+                  _menuItem(Icons.info_outline, 'About YɛRide', () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AboutScreen()),
+                    );
+                  }),
                   const SizedBox(height: 8),
                   _menuItem(
                     Icons.logout, 'Logout',

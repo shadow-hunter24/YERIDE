@@ -6,7 +6,15 @@ import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/location_service.dart';
 import '../auth/login_screen.dart';
+import '../shared/edit_profile_screen.dart';
+import '../shared/notifications_screen.dart';
+import '../shared/help_screen.dart';
+import '../shared/about_screen.dart';
+import '../shared/safety_screen.dart';
 import 'ride_request_screen.dart';
+import 'vehicle_screen.dart';
+import 'documents_screen.dart';
+import 'payout_screen.dart';
 
 class RiderHomeScreen extends StatefulWidget {
   const RiderHomeScreen({super.key});
@@ -434,10 +442,48 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                         fontWeight: FontWeight.bold)),
               ),
             const SizedBox(height: 32),
-            _menuItem(Icons.directions_bike, 'My Vehicle'),
-            _menuItem(Icons.document_scanner, 'Documents'),
-            _menuItem(Icons.account_balance_wallet_outlined, 'Payout Settings'),
-            _menuItem(Icons.help_outline, 'Help & Support'),
+            _menuItem(Icons.directions_bike, 'My Vehicle', onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const VehicleScreen()));
+            }),
+            _menuItem(Icons.document_scanner, 'Documents', onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const DocumentsScreen()));
+            }),
+            _menuItem(Icons.account_balance_wallet_outlined, 'Payout Settings', onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const PayoutScreen()));
+            }),
+            _menuItem(Icons.notifications_outlined, 'Notifications', onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen(collection: 'riders')));
+            }),
+            _menuItem(Icons.security, 'Safety', onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const SafetyScreen()));
+            }),
+            _menuItem(Icons.help_outline, 'Help & Support', onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const HelpScreen()));
+            }),
+            _menuItem(Icons.info_outline, 'About YɛRide', onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()));
+            }),
+            _menuItem(Icons.person_outline, 'Edit Profile', onTap: () async {
+              final updated = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => EditProfileScreen(
+                    collection: 'riders',
+                    currentName: data?['name'] ?? _name,
+                    currentPhone: data?['phone'] ?? '',
+                  ),
+                ),
+              );
+              if (updated == true) _loadUserData();
+            }),
             _menuItem(Icons.logout, 'Logout', color: Colors.redAccent, onTap: () async {
               await AuthService().logout();
               if (!mounted) return;

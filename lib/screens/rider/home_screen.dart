@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/trip_service.dart';
 import '../../services/location_service.dart';
 import '../auth/login_screen.dart';
 import '../shared/edit_profile_screen.dart';
@@ -12,6 +14,7 @@ import '../shared/help_screen.dart';
 import '../shared/about_screen.dart';
 import '../shared/safety_screen.dart';
 import 'ride_request_screen.dart';
+import 'navigation_screen.dart';
 import 'vehicle_screen.dart';
 import 'documents_screen.dart';
 import 'payout_screen.dart';
@@ -29,6 +32,90 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   String _name = '';
   Map<String, dynamic>? _userData;
 
+  // In-app trip notification
+  StreamSubscription? _tripAlertSub;
+  String? _alertTripId; // tracks which trip we are currently showing
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _tripAlertSub?.cancel();
+    super.dispose();
+  }
+
+  /// Start listening for new trips assigned to this rider.
+  /// Called once rider goes online.
+  void _startTripListener() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    _tripAlertSub?.cancel();
+    _tripAlertSub = FirebaseFirestore.instance
+        .collection('trips')
+        .where('assignedRiderId', isEqualTo: uid)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      for (final change in snapshot.docChanges) {
+        // Only react to newly added documents
+        if (change.type == DocumentChangeType.added) {
+          final tripId = change.doc.id;
+          // Don't show alert for the same trip twice
+          if (_alertTripId == tripId) return;
+          _alertTripId = tripId;
+          final data = change.doc.data() as Map<String, dynamic>;
+          _showTripAlert(tripId, data);
+        }
+      }
+    });
+  }
+
+  /// Stop listening when rider goes offline
+  void _stopTripListener() {
+    _tripAlertSub?.cancel();
+    _tripAlertSub = null;
+    _alertTripId = null;
+  }
+
+  /// Show a full-screen modal bottom sheet with the trip details
+  void _showTripAlert(String tripId, Map<String, dynamic> trip) {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _TripAlertSheet(
+        tripId: tripId,
+        trip: trip,
+        onAccepted: () {
+          _alertTripId = null;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => NavigationScreen(
+                tripId: tripId,
+                pickup: trip['pickupAddress'] ?? '',
+                destination: trip['destinationAddress'] ?? '',
+                fare: (trip['fare'] as num?)?.toDouble() ?? 0.0,
+              ),
+            ),
+          );
+        },
+        onDeclined: () {
+          _alertTripId = null;
+        },
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +130,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         _name = data['name'] ?? '';
         _isOnline = data['isOnline'] ?? false;
       });
+      // If rider was already online, start listening immediately
+      if (_isOnline) _startTripListener();
     }
   }
 
@@ -63,11 +152,13 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         if (pos != null) 'lat': pos.latitude,
         if (pos != null) 'lng': pos.longitude,
       });
+      _startTripListener(); // ← start watching for new trips
     } else {
       await FirebaseFirestore.instance
           .collection('riders')
           .doc(uid)
           .update({'isOnline': false});
+      _stopTripListener(); // ← stop watching
     }
   }
 
@@ -593,6 +684,263 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
             : null,
         onTap: onTap ?? () {},
       ),
+    );
+  }
+}
+
+// ─── In-app trip alert bottom sheet ──────────────────────────────────────────
+
+class _TripAlertSheet extends StatefulWidget {
+  final String tripId;
+  final Map<String, dynamic> trip;
+  final VoidCallback onAccepted;
+  final VoidCallback onDeclined;
+
+  const _TripAlertSheet({
+    required this.tripId,
+    required this.trip,
+    required this.onAccepted,
+    required this.onDeclined,
+  });
+
+  @override
+  State<_TripAlertSheet> createState() => _TripAlertSheetState();
+}
+
+class _TripAlertSheetState extends State<_TripAlertSheet>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  int _countdown = 30;
+  bool _accepting = false;
+  final TripService _tripService = TripService();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 30),
+    )..forward();
+
+    // Countdown timer
+    Stream.periodic(const Duration(seconds: 1), (i) => i)
+        .take(30)
+        .listen((i) {
+      if (!mounted) return;
+      setState(() => _countdown = 29 - i);
+      if (_countdown <= 0) {
+        // Auto-dismiss when timer expires
+        if (mounted) Navigator.pop(context);
+        widget.onDeclined();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _accept() async {
+    setState(() => _accepting = true);
+    try {
+      final userData = await UserService().getCurrentUserData();
+      final riderName = userData?['name'] ?? 'Rider';
+      await _tripService.acceptTrip(widget.tripId, riderName);
+      if (!mounted) return;
+      Navigator.pop(context); // close sheet
+      widget.onAccepted();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to accept: $e'),
+              backgroundColor: Colors.redAccent),
+        );
+        setState(() => _accepting = false);
+      }
+    }
+  }
+
+  void _decline() async {
+    await _tripService.updateTripStatus(widget.tripId, 'cancelled');
+    if (!mounted) return;
+    Navigator.pop(context);
+    widget.onDeclined();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pickup      = widget.trip['pickupAddress']      as String? ?? '';
+    final destination = widget.trip['destinationAddress'] as String? ?? '';
+    final fare        = (widget.trip['fare'] as num?)?.toStringAsFixed(2) ?? '0.00';
+    final distance    = (widget.trip['distanceKm'] as num?)?.toStringAsFixed(1) ?? '0';
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white12,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header with countdown
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('🏍  New Ride Request!',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18)),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 44, height: 44,
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      builder: (_, __) => CircularProgressIndicator(
+                        value: 1 - _controller.value,
+                        color: const Color(0xFFFFC107),
+                        backgroundColor: Colors.white12,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ),
+                  Text('$_countdown',
+                      style: const TextStyle(
+                          color: Color(0xFFFFC107),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Fare highlight
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFC107).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: const Color(0xFFFFC107).withValues(alpha: 0.4)),
+            ),
+            child: Text('GH₵ $fare',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: Color(0xFFFFC107),
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 16),
+
+          // Route
+          _routeRow(Icons.circle, const Color(0xFF4CAF50), pickup),
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Container(width: 2, height: 14, color: Colors.white12),
+          ),
+          _routeRow(Icons.location_on, const Color(0xFFFFC107), destination),
+          const SizedBox(height: 16),
+
+          // Details
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _detail(Icons.straighten, '$distance km'),
+              Container(width: 1, height: 28, color: Colors.white12),
+              _detail(Icons.access_time,
+                  '~${(double.tryParse(distance) ?? 0) * 3 ~/ 1} min'),
+              Container(width: 1, height: 28, color: Colors.white12),
+              _detail(Icons.payments_outlined, 'GH₵ $fare'),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white24),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _accepting ? null : _decline,
+                  child: const Text('Decline',
+                      style: TextStyle(color: Colors.white54, fontSize: 15)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFC107),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _accepting ? null : _accept,
+                  child: _accepting
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.black, strokeWidth: 2))
+                      : const Text('Accept Ride',
+                          style: TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _routeRow(IconData icon, Color color, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 13),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    );
+  }
+
+  Widget _detail(IconData icon, String value) {
+    return Column(
+      children: [
+        Icon(icon, color: const Color(0xFFFFC107), size: 18),
+        const SizedBox(height: 4),
+        Text(value,
+            style: const TextStyle(color: Colors.white, fontSize: 12)),
+      ],
     );
   }
 }

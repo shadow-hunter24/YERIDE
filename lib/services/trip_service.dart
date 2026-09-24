@@ -18,6 +18,8 @@ class TripService {
     required double distanceKm,
     required double fare,
     String? assignedRiderId,
+    double? passengerLat,
+    double? passengerLng,
   }) async {
     final doc = await _db.collection('trips').add({
       'passengerId': _uid,
@@ -33,9 +35,21 @@ class TripService {
       'assignedRiderId': assignedRiderId,
       'riderId': null,
       'riderName': null,
+      // Passenger's live location so rider can locate them
+      'passengerLat': passengerLat ?? pickupLat,
+      'passengerLng': passengerLng ?? pickupLng,
       'createdAt': FieldValue.serverTimestamp(),
     });
     return doc.id;
+  }
+
+  // Update passenger live location (called while waiting for rider)
+  Future<void> updatePassengerLocation(
+      String tripId, double lat, double lng) async {
+    await _db.collection('trips').doc(tripId).update({
+      'passengerLat': lat,
+      'passengerLng': lng,
+    });
   }
 
   // Listen to a trip's status changes

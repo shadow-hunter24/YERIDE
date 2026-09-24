@@ -116,12 +116,6 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadUserData();
-  }
-
   void _loadUserData() async {
     final data = await UserService().getCurrentUserData();
     if (mounted && data != null) {
@@ -812,7 +806,7 @@ class _TripAlertSheetState extends State<_TripAlertSheet>
                     width: 44, height: 44,
                     child: AnimatedBuilder(
                       animation: _controller,
-                      builder: (_, __) => CircularProgressIndicator(
+                      builder: (_, _) => CircularProgressIndicator(
                         value: 1 - _controller.value,
                         color: const Color(0xFFFFC107),
                         backgroundColor: Colors.white12,

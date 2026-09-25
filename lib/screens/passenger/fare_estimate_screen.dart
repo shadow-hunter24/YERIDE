@@ -3,6 +3,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/location_service.dart';
 import '../../services/trip_service.dart';
+import '../../widgets/connectivity_wrapper.dart';
 import 'tracking_screen.dart';
 
 class FareEstimateScreen extends StatefulWidget {
@@ -79,6 +80,7 @@ class _FareEstimateScreenState extends State<FareEstimateScreen> {
       );
       return;
     }
+    if (!ConnectivityWrapper.checkAndAlert(context)) return; // offline guard
     setState(() => _requesting = true);
     try {
       final tripId = await _tripService.createTrip(

@@ -7,6 +7,7 @@ import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/trip_service.dart';
 import '../../services/location_service.dart';
+import '../../widgets/connectivity_wrapper.dart';
 import '../auth/login_screen.dart';
 import '../shared/edit_profile_screen.dart';
 import '../shared/notifications_screen.dart';
@@ -133,6 +134,15 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     final newStatus = !_isOnline;
+
+    if (newStatus) {
+      // Ensure internet before going online
+      if (!ConnectivityWrapper.checkAndAlert(context)) return;
+      // Ensure location is available before going online
+      final ready = await LocationService().ensureLocationReady(context);
+      if (!ready || !mounted) return;
+    }
+
     setState(() => _isOnline = newStatus);
 
     if (newStatus) {

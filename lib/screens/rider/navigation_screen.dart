@@ -27,7 +27,11 @@ class NavigationScreen extends StatefulWidget {
 }
 
 class _NavigationScreenState extends State<NavigationScreen> {
-  int _step = 0; // 0 = go to pickup, 1 = trip ongoing, 2 = arrived at dest
+  // 0 = heading to pickup   → writes 'arriving'  on accept (already written)
+  // 1 = arrived at pickup   → writes 'arrived'   when rider taps "Arrived at Pickup"
+  // 2 = passenger onboard   → writes 'ongoing'   when rider taps "Picked Up Passenger"
+  // 3 = at destination      → writes 'completed' when rider taps "Complete Trip"
+  int _step = 0;
 
   final TripService _tripService = TripService();
   final LocationService _locationService = LocationService();
@@ -46,13 +50,15 @@ class _NavigationScreenState extends State<NavigationScreen> {
   StreamSubscription? _tripSub; // listens for passenger location updates
 
   bool _loading = false;
+  bool _drawing = false; // prevents concurrent _drawRoute calls
   String? _passengerPhone;
   String _passengerName = 'Passenger';
 
   List<Map<String, String>> get _steps => [
-        {'label': 'Head to pickup point', 'sub': widget.pickup},
-        {'label': 'Passenger onboard', 'sub': 'Navigate to destination'},
-        {'label': 'Arrived at destination', 'sub': widget.destination},
+        {'label': 'Head to pickup point',    'sub': widget.pickup},
+        {'label': 'Arrived at pickup',       'sub': 'Wait for passenger'},
+        {'label': 'Passenger onboard',       'sub': 'Navigate to destination'},
+        {'label': 'Arrived at destination',  'sub': widget.destination},
       ];
 
   @override
@@ -120,9 +126,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
       if (psLat != null && psLng != null) {
         final newPos = LatLng(psLat, psLng);
-        if (newPos != _passengerLatLng) {
+        // Compare actual coordinate values, not object references
+        final changed = _passengerLatLng == null ||
+            (_passengerLatLng!.latitude - newPos.latitude).abs() > 0.000001 ||
+            (_passengerLatLng!.longitude - newPos.longitude).abs() > 0.000001;
+        if (changed) {
           _passengerLatLng = newPos;
-          // Refresh markers only (no need to redraw the whole route)
           await _drawRoute();
         }
       }
@@ -134,6 +143,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final pos = await _locationService.getCurrentPosition();
     if (pos != null && mounted) {
       _currentPos = LatLng(pos.latitude, pos.longitude);
+      // Write initial position to Firestore immediately so the passenger map
+      // shows the rider marker as soon as the screen opens — the stream won't
+      // fire until the device moves ≥10 m, which could take a long time.
+      await _tripService.updateRiderLocation(
+          widget.tripId, pos.latitude, pos.longitude);
       await _drawRoute();
     }
 
@@ -149,36 +163,46 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   Future<void> _drawRoute() async {
     if (_currentPos == null) return;
+    if (_drawing) return; // drop concurrent calls — one draw at a time
+    _drawing = true;
 
-    LatLng destination;
+    try {
+      LatLng destination;
 
-    if (_step == 0) {
-      // Going to pickup
-      if (_pickupLatLng == null) return;
-      destination = _pickupLatLng!;
-    } else {
-      // Going to destination
-      if (_destinationLatLng == null) return;
-      destination = _destinationLatLng!;
+      if (_step <= 1) {
+        // Steps 0 & 1: heading to / waiting at pickup
+        if (_pickupLatLng == null) {
+          return; // finally resets _drawing
+        }
+        destination = _pickupLatLng!;
+      } else {
+        // Steps 2 & 3: passenger onboard, heading to drop-off
+        if (_destinationLatLng == null) {
+          return; // finally resets _drawing
+        }
+        destination = _destinationLatLng!;
+      }
+
+      final points = await _mapService.getRoutePoints(_currentPos!, destination);
+      if (!mounted) return;
+
+      setState(() {
+        _polylines = {
+          Polyline(
+            polylineId: const PolylineId('route'),
+            points: points.isNotEmpty ? points : [_currentPos!, destination],
+            color: const Color(0xFFFFC107),
+            width: 5,
+          ),
+        };
+        _markers = _buildMarkers(destination);
+      });
+
+      _mapController?.animateCamera(
+          MapService.fitBounds(_currentPos!, destination));
+    } finally {
+      _drawing = false; // always released, even on early return
     }
-
-    final points = await _mapService.getRoutePoints(_currentPos!, destination);
-    if (!mounted) return;
-
-    setState(() {
-      _polylines = {
-        Polyline(
-          polylineId: const PolylineId('route'),
-          points: points.isNotEmpty ? points : [_currentPos!, destination],
-          color: const Color(0xFFFFC107),
-          width: 5,
-        ),
-      };
-      _markers = _buildMarkers(destination);
-    });
-
-    _mapController?.animateCamera(
-        MapService.fitBounds(_currentPos!, destination));
   }
 
   Set<Marker> _buildMarkers(LatLng destination) {
@@ -196,12 +220,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
         position: destination,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
         infoWindow: InfoWindow(
-            title: _step == 0 ? widget.pickup : widget.destination),
+            title: _step <= 1 ? widget.pickup : widget.destination),
       ),
     };
 
-    // Passenger live location — blue (only shown in step 0, before pickup)
-    if (_step == 0 && _passengerLatLng != null) {
+    // Passenger live location — blue (only shown before pickup)
+    if (_step <= 1 && _passengerLatLng != null) {
       markers.add(Marker(
         markerId: const MarkerId('passenger'),
         position: _passengerLatLng!,
@@ -230,25 +254,34 @@ class _NavigationScreenState extends State<NavigationScreen> {
   }
 
   void _nextStep() async {
-    if (_step < 2) {
-      setState(() => _step++);
-      if (_step == 1) {
+    setState(() => _loading = true);
+    try {
+      if (_step == 0) {
+        // Rider arrived at pickup point → tell passenger "Rider has arrived"
+        await _tripService.updateTripStatus(widget.tripId, 'arrived');
+        setState(() => _step = 1);
+        await _drawRoute();
+      } else if (_step == 1) {
+        // Passenger boarded → trip is now ongoing
         await _tripService.updateTripStatus(widget.tripId, 'ongoing');
-      }
-      await _drawRoute();
-    } else {
-      setState(() => _loading = true);
-      await _tripService.completeTrip(widget.tripId, widget.fare);
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => RatePassengerScreen(
-            tripId: widget.tripId,
-            fare: widget.fare,
+        setState(() => _step = 2);
+        await _drawRoute();
+      } else if (_step == 2) {
+        // Rider arrived at destination → complete the trip
+        await _tripService.completeTrip(widget.tripId, widget.fare);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RatePassengerScreen(
+              tripId: widget.tripId,
+              fare: widget.fare,
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -385,9 +418,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
                               child: Container(
                                 height: 4,
                                 decoration: BoxDecoration(
-                                  color: i <= _step
+                                  color: i < _step
                                       ? const Color(0xFFFFC107)
-                                      : Colors.white12,
+                                      : i == _step
+                                          ? const Color(0xFFFFC107).withValues(alpha: 0.4)
+                                          : Colors.white12,
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
@@ -431,7 +466,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                             _step == 0
                                 ? 'Arrived at Pickup'
                                 : _step == 1
-                                    ? 'Start Trip'
+                                    ? 'Picked Up Passenger'
                                     : 'Complete Trip',
                             style: const TextStyle(
                                 color: Colors.black,

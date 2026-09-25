@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
+import '../services/location_service.dart';
 import 'onboarding_screen.dart';
 import 'passenger/home_screen.dart';
 import 'rider/home_screen.dart' as rider;
@@ -34,6 +35,12 @@ class _SplashScreenState extends State<SplashScreen>
     _controller.forward();
 
     Future.delayed(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+
+      // Ask for location before routing — works for both passengers and riders.
+      // We don't block routing on refusal; the individual screens handle that.
+      await LocationService().ensureLocationReady(context);
+
       if (!mounted) return;
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {

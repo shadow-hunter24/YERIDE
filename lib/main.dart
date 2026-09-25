@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'services/notification_service.dart';
+import 'services/connectivity_service.dart';
+import 'widgets/connectivity_wrapper.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
@@ -28,6 +30,9 @@ void main() async {
     await NotificationService().initialize();
   }
 
+  // Start connectivity monitoring before the first frame is drawn
+  await ConnectivityService.instance.init();
+
   runApp(const YerideApp());
 }
 
@@ -49,7 +54,11 @@ class YerideApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF121212),
         fontFamily: 'Roboto',
       ),
-      home: const SplashScreen(),
+      // ConnectivityWrapper sits outside every route so the banner
+      // persists across all navigation pushes and replacements.
+      home: const ConnectivityWrapper(
+        child: SplashScreen(),
+      ),
     );
   }
 }

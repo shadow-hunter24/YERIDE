@@ -66,6 +66,9 @@ class _HomeContentState extends State<_HomeContent> {
   }
 
   void _loadLocation() async {
+    final ready = await _locationService.ensureLocationReady(context);
+    if (!ready || !mounted) return;
+
     final pos = await _locationService.getCurrentPosition();
     if (pos != null && mounted) {
       setState(() => _currentPosition = LatLng(pos.latitude, pos.longitude));

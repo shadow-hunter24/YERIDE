@@ -41,6 +41,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
   LatLng? _destinationLatLng;
   String? _riderPhone;
   String _lastStatus = '';
+  bool _mapReady = false; // task #6: gate updates until controller exists
 
   // Passenger live location stream
   StreamSubscription? _passengerLocationSub;
@@ -70,11 +71,11 @@ class _TrackingScreenState extends State<TrackingScreen> {
   String _statusLabel(String status) {
     switch (status) {
       case 'pending':   return 'Finding your rider...';
-      case 'accepted':  return 'Rider accepted your request';
-      case 'arriving':  return 'Rider is on the way';
-      case 'arrived':   return 'Rider has arrived';
+      case 'accepted':  return 'Rider accepted — on the way';
+      case 'arrived':   return 'Rider has arrived!';
       case 'ongoing':   return 'Trip in progress';
       case 'completed': return 'Trip Completed!';
+      case 'cancelled': return 'Ride Cancelled';
       default:          return 'Processing...';
     }
   }
@@ -83,20 +84,19 @@ class _TrackingScreenState extends State<TrackingScreen> {
     switch (status) {
       case 'pending':   return 0;
       case 'accepted':  return 1;
-      case 'arriving':  return 2;
-      case 'arrived':   return 3;
-      case 'ongoing':   return 4;
-      case 'completed': return 5;
+      case 'arrived':   return 2;
+      case 'ongoing':   return 3;
+      case 'completed': return 4;
       default:          return 0;
     }
   }
 
   final List<String> _steps = [
     'Finding your rider...',
-    'Rider accepted your request',
     'Rider is on the way',
-    'Rider arrived',
+    'Rider has arrived',
     'Trip in progress',
+    'Trip completed',
   ];
 
   Future<void> _callRider(String? riderId) async {
@@ -125,13 +125,15 @@ class _TrackingScreenState extends State<TrackingScreen> {
   /// Redraws the route and all markers based on the latest trip snapshot.
   /// Called on every Firestore update.
   Future<void> _updateMap(Map<String, dynamic> data) async {
-    final pickupLat    = (data['pickupLat']      as num?)?.toDouble();
-    final pickupLng    = (data['pickupLng']      as num?)?.toDouble();
-    final riderLat     = (data['riderLat']       as num?)?.toDouble();
-    final riderLng     = (data['riderLng']       as num?)?.toDouble();
-    final destLat      = (data['destinationLat'] as num?)?.toDouble();
-    final destLng      = (data['destinationLng'] as num?)?.toDouble();
-    final status       = data['status'] as String? ?? 'pending';
+    if (!_mapReady) return; // task #6: don't touch map before controller exists
+
+    final pickupLat = (data['pickupLat']      as num?)?.toDouble();
+    final pickupLng = (data['pickupLng']      as num?)?.toDouble();
+    final riderLat  = (data['riderLat']       as num?)?.toDouble();
+    final riderLng  = (data['riderLng']       as num?)?.toDouble();
+    final destLat   = (data['destinationLat'] as num?)?.toDouble();
+    final destLng   = (data['destinationLng'] as num?)?.toDouble();
+    final status    = data['status'] as String? ?? 'pending';
 
     if (pickupLat == null || pickupLng == null) return;
 
@@ -142,55 +144,46 @@ class _TrackingScreenState extends State<TrackingScreen> {
       _destinationLatLng = LatLng(destLat, destLng);
     }
 
-    // Determine route endpoints based on trip status
-    LatLng? origin;
-    LatLng? dest;
-
     if (riderLat != null && riderLng != null) {
       final riderPos = LatLng(riderLat, riderLng);
 
-      if (status == 'ongoing' && _destinationLatLng != null) {
-        // Rider is heading to destination
-        origin = riderPos;
-        dest   = _destinationLatLng!;
-      } else {
-        // Rider is heading to pickup
-        origin = riderPos;
-        dest   = pickup;
-      }
+      // task #5: only route to destination when passenger is onboard (ongoing)
+      final LatLng routeDest = (status == 'ongoing' && _destinationLatLng != null)
+          ? _destinationLatLng!
+          : pickup;
 
-      // Only redraw route when rider has actually moved (>5m) or status changed
-      final riderMoved = _lastRiderPos == null ||
-          _distanceMeters(_lastRiderPos!, riderPos) > 5;
+      // task #4: always move the marker; only redo the polyline when something
+      // meaningful changed (status change OR rider moved more than 30 m).
+      final riderMovedFar = _lastRiderPos == null ||
+          _distanceMeters(_lastRiderPos!, riderPos) > 30;
       final statusChanged = status != _lastStatus;
 
-      if (riderMoved || statusChanged) {
+      if (riderMovedFar || statusChanged) {
         _lastRiderPos = riderPos;
         _lastStatus   = status;
 
-        final points = await _mapService.getRoutePoints(origin, dest);
+        final points = await _mapService.getRoutePoints(riderPos, routeDest);
         if (!mounted) return;
 
         setState(() {
           _polylines = {
             Polyline(
               polylineId: const PolylineId('route'),
-              points: points.isNotEmpty ? points : [origin!, dest!],
+              points: points.isNotEmpty ? points : [riderPos, routeDest],
               color: const Color(0xFFFFC107),
               width: 5,
             ),
           };
-          _markers = _buildMarkers(riderPos, pickup, dest!, status);
+          _markers = _buildMarkers(riderPos, pickup, routeDest, status);
         });
 
-        // Smoothly pan camera to keep both endpoints in view
-        _mapController
-            ?.animateCamera(MapService.fitBounds(origin, dest));
+        _mapController?.animateCamera(
+            MapService.fitBounds(riderPos, routeDest));
       } else {
-        // Just update marker position without redrawing the polyline
+        // Rider hasn't moved far — just slide the marker, keep the polyline
         if (!mounted) return;
         setState(() {
-          _markers = _buildMarkers(riderPos, pickup, dest!, status);
+          _markers = _buildMarkers(riderPos, pickup, routeDest, status);
         });
       }
     } else {
@@ -207,8 +200,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
           ),
         };
       });
-      _mapController
-          ?.animateCamera(CameraUpdate.newLatLngZoom(pickup, 15));
+      _mapController?.animateCamera(CameraUpdate.newLatLngZoom(pickup, 15));
     }
   }
 
@@ -293,6 +285,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 markers: _markers,
                 onMapCreated: (c) {
                   _mapController = c;
+                  _mapReady = true; // task #6: controller is now valid
                   if (data != null) _updateMap(data);
                 },
               ),
